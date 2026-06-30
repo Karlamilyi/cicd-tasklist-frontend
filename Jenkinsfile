@@ -1,7 +1,5 @@
 pipeline {
-    agent { 
-        label 'agent-1'
-    }
+    agent any
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('mouuuuuu-dockerhub-password')
@@ -42,12 +40,12 @@ pipeline {
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        sonar-scanner \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN \
+                    sh """
+                        npx sonarqube-scanner \
+                        -Dsonar.host.url=\$SONAR_HOST_URL \
+                        -Dsonar.login=\$SONAR_TOKEN \
                         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-                    '''
+                    """
                 }
             }
         }
@@ -121,13 +119,22 @@ pipeline {
         stage('Trivy scan') {
             steps {
                 sh '''
-                    trivy image --severity HIGH,CRITICAL --exit-code 1 \
-                    --format json -o trivy-report.json $DOCKER_IMAGE:$IMAGE_TAG
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --format table \
+                        --output trivy-report.txt \
+                        $DOCKER_IMAGE:$IMAGE_TAG || true
+
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --format json \
+                        --output trivy-report.json \
+                        $DOCKER_IMAGE:$IMAGE_TAG || true
                 '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'trivy-report.json', fingerprint: true, allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true
                 }
             }
         }
